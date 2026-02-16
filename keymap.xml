@@ -1,0 +1,6 @@
+<keymap>
+  <map context="CiefpSRTplayerActions">
+    <key id="KEY_CHANNELUP" mapto="nextSub" flags="m" />
+    <key id="KEY_CHANNELDOWN" mapto="prevSub" flags="m" />
+  </map>
+</keymap>
