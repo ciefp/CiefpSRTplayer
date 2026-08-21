@@ -27,7 +27,7 @@ import re
 import os
 
 PLUGIN_NAME = "CiefpSRTplayer"
-PLUGIN_VERSION = "1.0"
+PLUGIN_VERSION = "1.1"
 
 
 # ---------------- Config ----------------
@@ -77,7 +77,7 @@ config.plugins.ciefpsrt.scale_mode = ConfigSelection(default="none", choices=[
     ("25_to_24", "25 -> 24"),
 ])
 
-# NOVO: Quick presets
+# Quick presets
 config.plugins.ciefpsrt.quick_preset = ConfigSelection(default="none", choices=[
     ("none", "OFF - Manual settings"),
     ("live_tv_dvb", "Live TV (DVB) - normal"),
@@ -455,9 +455,9 @@ class SRTFileBrowser(Screen):
 
 class SRTPreviewScreen(Screen):
     skin = """
-    <screen name="SRTPreviewScreen" position="center,center" size="1200,700" title="SRT Preview">
-        <widget name="text" position="20,20" size="1160,600" font="Regular;26" />
-        <widget name="hint" position="20,635" size="1160,50" font="Regular;26" foregroundColor="#30fc03" transparent="1" />
+    <screen name="SRTPreviewScreen" position="center,center" size="1920,1080" title="SRT Preview">
+        <widget name="text" position="40,40" size="1840,920" font="Regular;28" />
+        <widget name="hint" position="40,1000" size="1840,60" font="Regular;28" foregroundColor="#30fc03" transparent="1" />
     </screen>
     """
 
@@ -496,9 +496,9 @@ class SRTPreviewScreen(Screen):
 
 class CuePickerScreen(Screen):
     skin = """
-    <screen name="CuePickerScreen" position="center,center" size="1200,800" title="Pick subtitle position">
-        <widget name="list" position="20,20" size="1160,720" font="Regular;26" itemHeight="30" halign="left" valign="center" scrollbarMode="showOnDemand" />
-        <widget name="hint" position="20,740" size="1160,60" font="Regular;26" halign="left" valign="center" foregroundColor="#30fc03" transparent="1" />
+    <screen name="CuePickerScreen" position="center,center" size="1920,1080" title="Pick subtitle position">
+        <widget name="list" position="40,40" size="1840,920" font="Regular;28" itemHeight="34" halign="left" valign="center" scrollbarMode="showOnDemand" />
+        <widget name="hint" position="40,1000" size="1840,60" font="Regular;28" halign="left" valign="center" foregroundColor="#30fc03" transparent="1" />
     </screen>
     """
 
@@ -925,8 +925,8 @@ class CiefpOverlay(Screen):
 
                 "red": self.fontDown,
                 "green": self.fontUp,
-                "yellow": self.toggleInfo,   # INFO show/hide
-                "blue": self.fpsNext,        # ciklus FPS preset
+                "yellow": self.openCuePicker,  # Sada otvara Cue Picker umesto toggle info
+                "blue": self.fpsNext,
 
                 "menu": self.openMenu,
             },
@@ -1415,6 +1415,31 @@ class CiefpOverlay(Screen):
             self["subtitle"].setText("")
         self.showStatus(timeout_s=15)
 
+    def openCuePicker(self):
+        """Otvara Cue Picker za sinhronizaciju"""
+        path = config.plugins.ciefpsrt.srt_path.value
+        if not path or not os.path.exists(path):
+            self.session.open(MessageBox, "No .srt selected.\nUse MENU -> Settings to select a file.", MessageBox.TYPE_INFO, timeout=5)
+            return
+        
+        # Otvori CuePicker sa callback-om
+        self.session.openWithCallback(
+            self._cuePickerCallback,
+            CuePickerScreen,
+            self.session,  # overlay_session
+            path
+        )
+
+    def _cuePickerCallback(self, cue_ms):
+        """Callback nakon što korisnik izabere cue u CuePicker-u"""
+        if cue_ms is not None:
+            now = self._get_now_ms()
+            if now is not None:
+                config.plugins.ciefpsrt.offset_ms.value = int(cue_ms) - int(now)
+                self.showStatus("Synced from Cue Picker", timeout_s=6)
+            else:
+                self.showStatus("Could not get current time", timeout_s=3)
+
     def subBack(self):
         config.plugins.ciefpsrt.offset_ms.value -= 1000
         self.showStatus()
@@ -1508,11 +1533,13 @@ class CiefpOverlay(Screen):
 
     def openMenu(self):
         choices = [
-            ("Quick Presets", "presets"),  # NOVO
+            ("Quick Presets", "presets"),
             ("Settings", "settings"),
             ("Select .srt file", "pick_srt"),
             ("Change subtitles folder", "pick_folder"),
             ("Reload current SRT", "reload"),
+            ("Pick cue & Sync", "cue_picker"),      # NOVO
+            ("Toggle Info bar", "toggle_info"),      # NOVO (ovo je bilo na žutom)
             ("Close", "close"),
         ]
         self.session.openWithCallback(self.menuCb, ChoiceBox, title="CiefpSRTplayer Menu", list=choices)
@@ -1533,6 +1560,10 @@ class CiefpOverlay(Screen):
             self.session.openWithCallback(self.onDirChosen, LocationBox, text="Select subtitles folder", currDir=curr)
         elif key == "reload":
             self.reloadSrt(show_error=True)
+        elif key == "cue_picker":
+            self.openCuePicker()
+        elif key == "toggle_info":
+            self.toggleInfo()  # <-- originalna funkcija sa žutog
         elif key == "close":
             self.close()
 
@@ -1552,7 +1583,6 @@ class CiefpOverlay(Screen):
     def applyPresetFromMenu(self, choice):
         if choice and choice[1]:
             self.applyQuickPreset(choice[1])
-
 
     def onDirChosen(self, newdir):
         if newdir:
